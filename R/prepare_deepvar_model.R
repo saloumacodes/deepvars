@@ -34,16 +34,17 @@ prepare_deepvar_model <- function(
             for (layer in 1:num_layers) {
                 model <- model %>%
                     keras::layer_lstm(
+                        object = model,
                         units = num_units,
                         return_sequences = ifelse(layer < num_layers, TRUE, FALSE),
                         input_shape = if (layer == 1) dim_input else NULL  # Only set input_shape for the first layer
                     ) %>%
-                    keras::layer_dropout(rate = p_drop_out)
+                    keras::layer_dropout(object = model, rate = p_drop_out)
             }
 
             # Add dense and distribution layers
             model <- model %>%
-                keras::layer_dense(units = 2, activation = "linear") %>%
+                keras::layer_dense(object = model, units = 2, activation = "linear") %>%
                 tfprobability::layer_distribution_lambda(
                     function(x) {
                         tfprobability::tfd_normal(
