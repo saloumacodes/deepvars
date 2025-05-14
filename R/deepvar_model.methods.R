@@ -1,6 +1,5 @@
-# Fit model: ----
 #' @importFrom keras `%>%`
-fit.deepvar_model <- function(deepvar_model,verbose=0,...) {
+fit.deepvar_model <- function(deepvar_model, verbose = 0, ...) {
 
   K <- deepvar_model$model_data$K
   X_train <- deepvar_model$model_data$X
@@ -10,14 +9,15 @@ fit.deepvar_model <- function(deepvar_model,verbose=0,...) {
   fitted_models <- lapply(
     1:K,
     function(k) {
-      history <- deepvar_model$model_list[[k]] %>%
-        keras::fit(
-          x = X_train, y = y_train[,,k],
-          verbose = verbose,
-          ...
-        )
+      model <- deepvar_model$model_list[[k]]
+      history <- model$fit(
+        x = X_train,
+        y = y_train[,,k],
+        verbose = verbose,
+        ...
+      )
       list(
-        model = deepvar_model$model_list[[k]],
+        model = model,
         history = history
       )
     }
@@ -30,16 +30,15 @@ fit.deepvar_model <- function(deepvar_model,verbose=0,...) {
   deepvar_model$y_train <- y_train
 
   return(deepvar_model)
-
 }
 
-fit <- function(deepvar_model,...) {
+fit <- function(deepvar_model, ...) {
   UseMethod("fit", deepvar_model)
 }
 
 ## Predictions: ----
 #' @export
-posterior_predictive.deepvar_model <- function(deepvar_model, X=NULL) {
+posterior_predictive.deepvar_model <- function(deepvar_model, X = NULL) {
 
   if (is.null(X) & !is.null(deepvar_model$y_hat)) {
     y_hat <- deepvar_model$y_hat
@@ -49,10 +48,10 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X=NULL) {
     if (is.null(X)) {
       X <- deepvar_model$X_train
     }
-    if (length(dim(X))<3) {
+    if (length(dim(X)) < 3) {
       # ! If new data is not 3D tensor, assume that unscaled 2D tensor was supplied !
       # Get rid of constant:
-      if (all(X[,1]==1)) {
+      if (all(X[,1] == 1)) {
         X <- X[,-1]
       }
       # Apply scaling:
@@ -61,7 +60,7 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X=NULL) {
       K <- deepvar_model$model_data$K
       X <- apply_scaler_from_training(X, scaler, lags, K)
       # Reshape:
-      X <- keras::array_reshape(X, dim=c(dim(X)[1],1,dim(X)[2]))
+      X <- keras::array_reshape(X, dim = c(dim(X)[1], 1, dim(X)[2]))
     }
 
     # Compute fitted values:
@@ -73,9 +72,9 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X=NULL) {
         y_hat <- as.numeric(fitted %>% tfprobability::tfd_mean())
         sd <- as.numeric(fitted %>% tfprobability::tfd_stddev())
         # Rescale data:
-        y_hat <- invert_scaling(y_hat, deepvar_model$model_data, k=k)
-        sd <- invert_scaling(sd, deepvar_model$model_data, k=k)
-        return(list(y_hat=unlist(y_hat), sd=unlist(sd)))
+        y_hat <- invert_scaling(y_hat, deepvar_model$model_data, k = k)
+        sd <- invert_scaling(sd, deepvar_model$model_data, k = k)
+        return(list(y_hat = unlist(y_hat), sd = unlist(sd)))
       }
     )
     # Posterior mean:
@@ -88,16 +87,16 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X=NULL) {
     colnames(sd) <- deepvar_model$model_data$var_names
   }
 
-  return(list(mean=y_hat, sd=sd))
+  return(list(mean = y_hat, sd = sd))
 }
 
 #' @export
-posterior_predictive <- function(deepvar_model, X=NULL) {
+posterior_predictive <- function(deepvar_model, X = NULL) {
   UseMethod("posterior_predictive", deepvar_model)
 }
 
 #' @export
-fitted.deepvar_model <- function(deepvar_model, X=NULL) {
+fitted.deepvar_model <- function(deepvar_model, X = NULL) {
   if (is.null(X)) {
     y_hat <- deepvar_model$posterior_predictive$mean
   } else {
@@ -107,7 +106,7 @@ fitted.deepvar_model <- function(deepvar_model, X=NULL) {
 }
 
 #' @export
-uncertainty.deepvar_model <- function(deepvar_model, X=NULL) {
+uncertainty.deepvar_model <- function(deepvar_model, X = NULL) {
   if (is.null(X)) {
     uncertainty <- deepvar_model$posterior_predictive$sd
   } else {
@@ -117,31 +116,30 @@ uncertainty.deepvar_model <- function(deepvar_model, X=NULL) {
 }
 
 #' @export
-uncertainty <- function(deepvar_model, X=NULL) {
+uncertainty <- function(deepvar_model, X = NULL) {
   UseMethod("uncertainty", deepvar_model)
 }
 
 #' @export
-residuals.deepvar_model <- function(deepvar_model, X=NULL, y=NULL) {
+residuals.deepvar_model <- function(deepvar_model, X = NULL, y = NULL) {
 
-  new_data <- new_data_supplied(X=X,y=y)
+  new_data <- new_data_supplied(X = X, y = y)
 
   if (new_data | is.null(deepvar_model$res)) {
     if (!new_data) {
       # If no new data is supplied, training outputs are re-scaled:
       X <- deepvar_model$X_train
       y <- deepvar_model$y_train
-      y <- keras::array_reshape(y, dim=c(dim(y)[1],dim(y)[3]))
+      y <- keras::array_reshape(y, dim = c(dim(y)[1], dim(y)[3]))
       y <- invert_scaling(y, deepvar_model$model_data)
     }
-    y_hat <- fitted(deepvar_model, X=X)
+    y_hat <- fitted(deepvar_model, X = X)
     res <- y - y_hat
   } else {
     res <- deepvar_model$res
   }
 
   return(res)
-
 }
 
 #' @export
@@ -152,24 +150,24 @@ prepare_predictors.deepvar_model <- function(deepvar_model, data) {
   # Explanatory variables:
   X = as.matrix(
     data[
-      (.N-(lags-1)):.N, # take last p rows
+      (.N - (lags - 1)):.N, # take last p rows
       sapply(
-        0:(lags-1),
+        0:(lags - 1),
         function(lag) {
           data.table::shift(.SD, lag)
         }
       )
-      ][.N,] # take last row of that
+    ][.N,] # take last row of that
   )
 
-  X <- keras::array_reshape(X, dim = c(1,1,ncol(X)))
+  X <- keras::array_reshape(X, dim = c(1, 1, ncol(X)))
 
   return(X)
-
 }
 
 #' @export
 prepare_predictors <- function(deepvar_model, data) {
   UseMethod("prepare_predictors", deepvar_model)
 }
+
 
