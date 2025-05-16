@@ -10,6 +10,7 @@
 #' @param verbose Verbosity level
 #' @param bayes Bayesian mode (not used in this function)
 #' @param n_mc Number of Monte Carlo samples (not used in this function)
+#' @param epochs Number of epochs for training (new)
 #' @param ... Additional arguments
 #'
 #' @return A trained deepvar_model object
@@ -27,12 +28,15 @@ deepvareg <- function(
     verbose = 0,
     bayes = TRUE,
     n_mc = 50,
+    epochs = 50, #Add epochs as an argument to the function
     ...
 ) {
-
+  
+  epochs <- as.integer(epochs) # Coerce epochs to integer
+  
   # Prepare data:
   deepvar_data <- prepare_deepvar_data(data, lags, horizon, type)
-
+  
   # Prepare model:
   deepvar_model <- prepare_deepvar_model(
     deepvar_data,
@@ -40,25 +44,24 @@ deepvareg <- function(
     num_layers = num_layers,
     p_drop_out = p_drop_out
   )
-
+  
   # Fit the model:
-  deepvar_model <- fit(deepvar_model, verbose = verbose, ...)
-
+  deepvar_model <- fit(deepvar_model, verbose = verbose, epochs = epochs, ...) # epochs passed in the fit function
+  
   # Posterior predictive:
   deepvar_model$posterior_predictive <- posterior_predictive(deepvar_model)
-
+  
   # Fitted values:
   deepvar_model$y_hat <- deepvar_model$posterior_predictive$mean
-
+  
   # Predictive uncertainty:
   deepvar_model$uncertainty <- deepvar_model$posterior_predictive$sd
-
+  
   # Residuals:
   deepvar_model$res <- residuals(deepvar_model)
-
+  
   # Assign class:
   class(deepvar_model) <- c("deepvar_model", "dvars_model")
-
+  
   return(deepvar_model)
 }
-
