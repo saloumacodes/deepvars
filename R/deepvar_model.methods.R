@@ -1,18 +1,31 @@
 #' @importFrom keras `%>%`
-fit.deepvar_model <- function(deepvar_model, verbose = 0, ...) {
-
+fit.deepvar_model <- function(deepvar_model, verbose = 0, epochs = 50, ...) {
+  
   K <- deepvar_model$model_data$K
   X_train <- deepvar_model$model_data$X
   y_train <- deepvar_model$model_data$y
-
+  time_steps <- dim(X_train)[2] # number of time_steps in the X_train dataset
+  
   # Fit models:
   fitted_models <- lapply(
     1:K,
     function(k) {
       model <- deepvar_model$model_list[[k]]
+      
+      # Reshape y_train to (samples, time_steps, 1)
+      y_reshaped <- array(y_train[,,k], dim = c(dim(y_train)[1], dim(y_train)[2], 1))
+      
+      # Create a NEW optimizer for each model:
+      optimizer <- keras::optimizer_adam(learning_rate = 0.001)  # Or use epsilon from prepare_deepvar_model if needed
+      model$compile(
+        optimizer = optimizer,
+        loss      = deepvar_model$model_list[[k]]$loss  # Keep the same loss function
+      )
+      
       history <- model$fit(
         x = X_train,
-        y = y_train[,,k],
+        y = y_reshaped,
+        epochs = epochs, #Explicitly pass the epochs parameter
         verbose = verbose,
         ...
       )
@@ -22,13 +35,13 @@ fit.deepvar_model <- function(deepvar_model, verbose = 0, ...) {
       )
     }
   )
-
+  
   # Output:
   deepvar_model$model_list <- lapply(fitted_models, function(fitted_model) fitted_model[["model"]]) # update model list
   deepvar_model$model_histories <- lapply(fitted_models, function(fitted_model) fitted_model[["history"]]) # extract history
   deepvar_model$X_train <- X_train
   deepvar_model$y_train <- y_train
-
+  
   return(deepvar_model)
 }
 
@@ -39,11 +52,11 @@ fit <- function(deepvar_model, ...) {
 ## Predictions: ----
 #' @export
 posterior_predictive.deepvar_model <- function(deepvar_model, X = NULL) {
-
+  
   if (is.null(X) & !is.null(deepvar_model$y_hat)) {
     y_hat <- deepvar_model$y_hat
   } else {
-
+    
     # Preprocessing:
     if (is.null(X)) {
       X <- deepvar_model$X_train
@@ -62,7 +75,7 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X = NULL) {
       # Reshape:
       X <- keras::array_reshape(X, dim = c(dim(X)[1], 1, dim(X)[2]))
     }
-
+    
     # Compute fitted values:
     fitted <- lapply(
       1:length(deepvar_model$model_list),
@@ -86,7 +99,7 @@ posterior_predictive.deepvar_model <- function(deepvar_model, X = NULL) {
     rownames(sd) <- NULL
     colnames(sd) <- deepvar_model$model_data$var_names
   }
-
+  
   return(list(mean = y_hat, sd = sd))
 }
 
@@ -122,9 +135,9 @@ uncertainty <- function(deepvar_model, X = NULL) {
 
 #' @export
 residuals.deepvar_model <- function(deepvar_model, X = NULL, y = NULL) {
-
+  
   new_data <- new_data_supplied(X = X, y = y)
-
+  
   if (new_data | is.null(deepvar_model$res)) {
     if (!new_data) {
       # If no new data is supplied, training outputs are re-scaled:
@@ -138,15 +151,15 @@ residuals.deepvar_model <- function(deepvar_model, X = NULL, y = NULL) {
   } else {
     res <- deepvar_model$res
   }
-
+  
   return(res)
 }
 
 #' @export
 prepare_predictors.deepvar_model <- function(deepvar_model, data) {
-
+  
   lags <- deepvar_model$model_data$lags
-
+  
   # Explanatory variables:
   X = as.matrix(
     data[
@@ -159,9 +172,9 @@ prepare_predictors.deepvar_model <- function(deepvar_model, data) {
       )
     ][.N,] # take last row of that
   )
-
+  
   X <- keras::array_reshape(X, dim = c(1, 1, ncol(X)))
-
+  
   return(X)
 }
 
@@ -169,5 +182,3 @@ prepare_predictors.deepvar_model <- function(deepvar_model, data) {
 prepare_predictors <- function(deepvar_model, data) {
   UseMethod("prepare_predictors", deepvar_model)
 }
-
-
