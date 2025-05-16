@@ -41,22 +41,28 @@ prepare_deepvar_model <- function(
       activation = "linear"
     )(x)
     
+    # Lambda layer to create TFP distribution
+    dist_layer <- tf$keras$layers$Lambda(function(params) {
+      mu        <- params[, 1, drop = FALSE]
+      sigma_raw <- params[, 2, drop = FALSE]
+      sigma     <- 1e-3 + tf$math$softplus(sigma_raw)
+      dist      <- tfprobability$distributions$Normal(loc = mu, scale = sigma)
+      return(dist)
+    })(preds)
+    
     # Build the model
     model <- keras::keras_model(
       inputs  = input_layer,
-      outputs = preds
+      outputs = dist_layer
     )
     
     # Custom Negative Log-Likelihood loss
     nll_loss <- function(y_true, y_pred) {
-      mu        <- y_pred[, 1, drop = FALSE]
-      sigma_raw <- y_pred[, 2, drop = FALSE]
-      sigma     <- 1e-3 + tensorflow::tf$math$softplus(sigma_raw)
-      dist      <- tfprobability::tfd_normal(loc = mu, scale = sigma)
-      -tensorflow::tf$reduce_mean(dist$log_prob(y_true))
+      # y_pred is now a distribution object
+      -tensorflow::tf$reduce_mean(y_pred$log_prob(y_true))
     }
     
-    # ✅ Compile model (Keras 3 compatible)
+    # ✅ Compile model
     model$compile(
       optimizer = keras::optimizer_adam(learning_rate = epsilon),
       loss      = nll_loss
